@@ -43,6 +43,9 @@ jobs:
         run: |
           git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
           echo "$PWD/depot_tools" >> $GITHUB_PATH
+          export PATH="$PWD/depot_tools:$PATH"
+          echo $PATH
+          apt install ninja-build
 
       - name: Run gclient sync
         run: |
@@ -58,10 +61,11 @@ jobs:
 
       - name: Build
         run: |
+          cd flutter
           # Ignore unsupported linker option.
-          sed -i "/-Wl,--undefined-version/d" flutter/engine/src/build/config/compiler/BUILD.gn
+          sed -i "/-Wl,--undefined-version/d" engine/src/build/config/compiler/BUILD.gn
 
-          flutter/engine/src/flutter/tools/gn \
+          engine/src/flutter/tools/gn \
             --target-os linux \
             --linux-cpu ${{ matrix.arch }} \
             --no-goma \
@@ -72,12 +76,17 @@ jobs:
             --enable-fontconfig \
             --disable-desktop-embeddings \
             --target-dir build
-          ninja -C flutter/engine/src/out/build flutter_engine_library
-          cp -f flutter/engine/src/flutter/third_party/icu/flutter/icudtl.dat flutter/engine/src/out/build
+          cd engine/src
+          ls -al
+          echo $PATH
+          ninja -C out/build flutter_engine_library
+          cp -f flutter/third_party/icu/flutter/icudtl.dat out/build
 
       - name: Build gen_snapshot
         if: ${{ matrix.mode != 'debug' }}
-        run: ninja -C flutter/engine/src/out/build clang_x64/gen_snapshot
+        run: |
+          cd flutter
+          ninja -C engine/src/out/build clang_x64/gen_snapshot
 
       - uses: actions/upload-artifact@v4
         with:
