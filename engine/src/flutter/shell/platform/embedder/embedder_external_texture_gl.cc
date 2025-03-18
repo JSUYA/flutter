@@ -138,6 +138,16 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpeller(
     return nullptr;
   }
 
+  if (texture->bind_callback != nullptr) {
+    return ResolveTextureImpellerSurface(aiks_context, std::move(texture));
+  } else {
+    return ResolveTextureImpellerPixelbuffer(aiks_context, std::move(texture));
+  }
+}
+
+sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpellerPixelbuffer(
+    impeller::AiksContext* aiks_context,
+    std::unique_ptr<FlutterOpenGLTexture> texture) {
   // Call the destruction callback if an error occurs.
   fml::ScopedCleanupClosure scoped_cleanup([&texture]() {
     if (texture->destruction_callback) {
@@ -152,14 +162,21 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpeller(
 
   impeller::TextureDescriptor desc;
   desc.size = impeller::ISize(texture->width, texture->height);
+  desc.type = impeller::TextureType::kTexture2D;
+  desc.storage_mode = impeller::StorageMode::kDevicePrivate;
   desc.format = impeller::PixelFormat::kR8G8B8A8UNormInt;
 
   impeller::ContextGLES& context =
       impeller::ContextGLES::Cast(*aiks_context->GetContext());
-  impeller::HandleGLES handle = context.GetReactor()->CreateHandle(
-      impeller::HandleType::kTexture, texture->name);
+
   std::shared_ptr<impeller::TextureGLES> image =
-      impeller::TextureGLES::WrapTexture(context.GetReactor(), desc, handle);
+      std::make_shared<impeller::TextureGLES>(context.GetReactor(), desc);
+
+  image->MarkContentsInitialized();
+  if (!image->SetContents(texture->buffer, texture->buffer_size)) {
+    FML_LOG(ERROR) << "Could not set texture contents";
+    return nullptr;
+  }
 
   if (!image) {
     FML_LOG(ERROR) << "Could not create external texture";
@@ -177,14 +194,83 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpeller(
                            user_data = texture->user_data]() {
     callback(user_data);
   };
-  if (!context.GetReactor()->RegisterCleanupCallback(handle,
-                                                     cleanup_callback)) {
+  impeller::HandleGLES handle = context.GetReactor()->CreateHandle(
+      impeller::HandleType::kTexture, texture->name);
+  if (!context.GetReactor()->RegisterCleanupCallback(handle, cleanup_callback)) {
     FML_LOG(ERROR) << "Could not register destruction callback";
     return nullptr;
   }
 
   image->SetCoordinateSystem(
       impeller::TextureCoordinateSystem::kUploadFromHost);
+
+  scoped_cleanup.Release();
+
+  return impeller::DlImageImpeller::Make(image);
+}
+
+sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpellerSurface(
+    impeller::AiksContext* aiks_context,
+    std::unique_ptr<FlutterOpenGLTexture> texture) {
+  // Call the destruction callback if an error occurs.
+  fml::ScopedCleanupClosure scoped_cleanup([&texture]() {
+    if (texture->destruction_callback) {
+      texture->destruction_callback(texture->user_data);
+    }
+  });
+
+  if (texture->format != GL_RGBA8) {
+    FML_LOG(ERROR) << "Only support GL_RGBA8 format now";
+    return nullptr;
+  }
+
+  impeller::TextureDescriptor desc;
+  desc.size = impeller::ISize(texture->width, texture->height);
+  desc.storage_mode = impeller::StorageMode::kDevicePrivate;
+  desc.format = impeller::PixelFormat::kR8G8B8A8UNormInt;
+  desc.type = impeller::TextureType::kTextureExternalOES;
+
+  impeller::ContextGLES& context =
+      impeller::ContextGLES::Cast(*aiks_context->GetContext());
+
+  std::shared_ptr<impeller::TextureGLES> image =
+      std::make_shared<impeller::TextureGLES>(context.GetReactor(), desc);
+  image->MarkContentsInitialized();
+  image->SetCoordinateSystem(
+      impeller::TextureCoordinateSystem::kUploadFromHost);
+
+  if (!image->Bind()) {
+    FML_LOG(ERROR) << "Could not bind texture";
+    return nullptr;
+  }
+
+  if (!image) {
+    FML_LOG(ERROR) << "Could not create external texture";
+    return nullptr;
+  }
+
+  if (!texture->bind_callback(texture->user_data)) {
+    FML_LOG(ERROR) << "bind_callback failed";
+    return nullptr;
+  }
+
+  VoidCallback destruction_callback = texture->destruction_callback;
+  if (!destruction_callback) {
+    // Set a no-op cleanup callback if the texture does not provide a callback.
+    // The presence of a cleanup callback indicates that the embedder controls
+    // the GL texture's lifetime and Impeller should not delete it.
+    destruction_callback = [](void*) {};
+  }
+  auto cleanup_callback = [callback = destruction_callback,
+                           user_data = texture->user_data]() {
+    callback(user_data);
+  };
+  impeller::HandleGLES handle = context.GetReactor()->CreateHandle(
+      impeller::HandleType::kTexture, texture->name);
+  if (!context.GetReactor()->RegisterCleanupCallback(handle, cleanup_callback)) {
+    FML_LOG(ERROR) << "Could not register destruction callback";
+    return nullptr;
+  }
 
   scoped_cleanup.Release();
 
