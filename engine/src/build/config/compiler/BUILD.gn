@@ -526,6 +526,7 @@ config("runtime_library") {
       "_CRT_SECURE_NO_DEPRECATE",
       "_HAS_EXCEPTIONS=0",
       "_SCL_SECURE_NO_DEPRECATE",
+      "_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH",
     ]
   }
 
