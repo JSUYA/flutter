@@ -148,7 +148,7 @@ jobs:
 
     strategy:
       matrix:
-        arch: [arm, arm64, x64]
+        arch: [arm, arm64]
         mode: [release, profile]
 
     steps:
@@ -172,10 +172,6 @@ jobs:
           echo "DEPOT_TOOLS_WIN_TOOLCHAIN=0" >> $Env:GITHUB_ENV
           echo "GYP_MSVS_OVERRIDE_PATH=C:\Program Files\Microsoft Visual Studio\2022\Enterprise" >> $Env:GITHUB_ENV
           echo "WINDOWSSDKDIR=C:\Program Files (x86)\Windows Kits\10" >> $Env:GITHUB_ENV
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
 
       - name: Install depot_tools
         run: |
@@ -201,30 +197,22 @@ jobs:
       - name: Build
         working-directory: C:\workspace\flutter\engine\src
         run: |
-          # Align host_toolchain with the Windows runner so //flutter:gen_snapshot
-          # resolves to a Windows toolchain while still targeting Linux.
-          (Get-Content ".\build\config\BUILDCONFIG.gn") | ForEach-Object { $_ -replace '//build/toolchain/linux:clang_\$host_cpu','//build/toolchain/win:clang_$host_cpu' } | Set-Content ".\build\config\BUILDCONFIG.gn"
-
-          python .\flutter\tools\gn `
+          python3 .\flutter\tools\gn `
             --linux `
             --linux-cpu=${{ matrix.arch }} `
             --runtime-mode=${{ matrix.mode }} `
             --no-goma `
-            --target-toolchain=_ `
-            --target-sysroot=_ `
-            --target-triple=_ `
-            --disable-desktop-embeddings `
             --target-dir build
-          ninja -C .\out\build clang_x64/gen_snapshot
+          ninja -C .\out\build gen_snapshot
 
       - uses: actions/upload-artifact@v4
         with:
           name: tizen-${{ matrix.arch }}-${{ matrix.mode }}_windows-x64
-          path: C:\workspace\flutter\engine\src\out\build\clang_x64\gen_snapshot.exe
+          path: C:\workspace\flutter\engine\src\out\build\gen_snapshot.exe
           if-no-files-found: error
 
   macos-build:
-    runs-on: macos-15
+    runs-on: macos-latest
 
     strategy:
       matrix:
@@ -338,7 +326,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [build, windows-build, macos-build, macos-intel-build]
+    needs: [build, macos-build, macos-intel-build]
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
 
