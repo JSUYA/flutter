@@ -201,26 +201,51 @@ jobs:
       - name: Build
         working-directory: C:\workspace\flutter\engine\src
         run: |
-          # Align host_toolchain with the Windows runner so //flutter:gen_snapshot
-          # resolves to a Windows toolchain while still targeting Linux.
-          (Get-Content ".\build\config\BUILDCONFIG.gn") | ForEach-Object { $_ -replace '//build/toolchain/linux:clang_\$host_cpu','//build/toolchain/win:clang_$host_cpu' } | Set-Content ".\build\config\BUILDCONFIG.gn"
+          python -c 'from pathlib import Path
+          path = Path(r".\build\config\BUILDCONFIG.gn")
+          content = path.read_text()
+          old = "\n".join([
+              "  if (is_clang) {",
+              "    host_toolchain = \"//build/toolchain/linux:clang_$host_cpu\"",
+              "    set_default_toolchain(\"//build/toolchain/linux:clang_$current_cpu\")",
+              "  } else {",
+              "",
+          ])
+          new = "\n".join([
+              "  if (is_clang) {",
+              "    if (host_os == \"win\") {",
+              "      host_toolchain = \"//build/toolchain/win:clang_$host_cpu\"",
+              "    } else if (host_os == \"mac\") {",
+              "      host_toolchain = \"//build/toolchain/mac:clang_$host_cpu\"",
+              "    } else {",
+              "      host_toolchain = \"//build/toolchain/linux:clang_$host_cpu\"",
+              "    }",
+              "    set_default_toolchain(\"//build/toolchain/linux:clang_$current_cpu\")",
+              "  } else {",
+              "",
+          ])
+          if old not in content:
+              raise SystemExit("expected BUILDCONFIG block not found")
+          path.write_text(content.replace(old, new))'
 
           python .\flutter\tools\gn `
             --linux `
             --linux-cpu=${{ matrix.arch }} `
             --runtime-mode=${{ matrix.mode }} `
             --no-goma `
-            --target-toolchain=_ `
-            --target-sysroot=_ `
-            --target-triple=_ `
-            --disable-desktop-embeddings `
             --target-dir build
-          ninja -C .\out\build gen_snapshot
+          if ("${{ matrix.arch }}" -eq "arm") {
+            ninja -C .\out\build clang_x86/gen_snapshot
+          } else {
+            ninja -C .\out\build clang_x64/gen_snapshot
+          }
 
       - uses: actions/upload-artifact@v4
         with:
           name: tizen-${{ matrix.arch }}-${{ matrix.mode }}_windows-x64
-          path: C:\workspace\flutter\engine\src\out\build\gen_snapshot.exe
+          path: |
+            C:\workspace\flutter\engine\src\out\build\clang_x86\gen_snapshot.exe
+            C:\workspace\flutter\engine\src\out\build\clang_x64\gen_snapshot.exe
           if-no-files-found: error
 
   macos-build:
@@ -257,17 +282,37 @@ jobs:
       - name: Build
         run: |
           cd flutter
-          # Change host_toolchain to mac/clang_arm64.
-          sed -i "" "s|//build/toolchain/linux:clang_$host_cpu|//build/toolchain/mac:clang_$host_cpu|g" engine/src/build/config/BUILDCONFIG.gn
+          python -c 'from pathlib import Path
+          path = Path("engine/src/build/config/BUILDCONFIG.gn")
+          content = path.read_text()
+          old = "\n".join([
+              "  if (is_clang) {",
+              "    host_toolchain = \"//build/toolchain/linux:clang_$host_cpu\"",
+              "    set_default_toolchain(\"//build/toolchain/linux:clang_$current_cpu\")",
+              "  } else {",
+              "",
+          ])
+          new = "\n".join([
+              "  if (is_clang) {",
+              "    if (host_os == \"win\") {",
+              "      host_toolchain = \"//build/toolchain/win:clang_$host_cpu\"",
+              "    } else if (host_os == \"mac\") {",
+              "      host_toolchain = \"//build/toolchain/mac:clang_$host_cpu\"",
+              "    } else {",
+              "      host_toolchain = \"//build/toolchain/linux:clang_$host_cpu\"",
+              "    }",
+              "    set_default_toolchain(\"//build/toolchain/linux:clang_$current_cpu\")",
+              "  } else {",
+              "",
+          ])
+          if old not in content:
+              raise SystemExit("expected BUILDCONFIG block not found")
+          path.write_text(content.replace(old, new))'
 
-          # Pass dummy values to prevent using the default (Linux) toolchain.
           engine/src/flutter/tools/gn \
             --linux \
             --linux-cpu=${{ matrix.arch }} \
             --no-goma \
-            --target-toolchain _ \
-            --target-sysroot _ \
-            --target-triple _ \
             --runtime-mode=${{ matrix.mode }} \
             --disable-desktop-embeddings \
             --target-dir build
@@ -314,17 +359,37 @@ jobs:
       - name: Build
         run: |
           cd flutter
-          # Change host_toolchain to mac/clang_x64.
-          sed -i "" "s|//build/toolchain/linux:clang_$host_cpu|//build/toolchain/mac:clang_$host_cpu|g" engine/src/build/config/BUILDCONFIG.gn
+          python -c 'from pathlib import Path
+          path = Path("engine/src/build/config/BUILDCONFIG.gn")
+          content = path.read_text()
+          old = "\n".join([
+              "  if (is_clang) {",
+              "    host_toolchain = \"//build/toolchain/linux:clang_$host_cpu\"",
+              "    set_default_toolchain(\"//build/toolchain/linux:clang_$current_cpu\")",
+              "  } else {",
+              "",
+          ])
+          new = "\n".join([
+              "  if (is_clang) {",
+              "    if (host_os == \"win\") {",
+              "      host_toolchain = \"//build/toolchain/win:clang_$host_cpu\"",
+              "    } else if (host_os == \"mac\") {",
+              "      host_toolchain = \"//build/toolchain/mac:clang_$host_cpu\"",
+              "    } else {",
+              "      host_toolchain = \"//build/toolchain/linux:clang_$host_cpu\"",
+              "    }",
+              "    set_default_toolchain(\"//build/toolchain/linux:clang_$current_cpu\")",
+              "  } else {",
+              "",
+          ])
+          if old not in content:
+              raise SystemExit("expected BUILDCONFIG block not found")
+          path.write_text(content.replace(old, new))'
 
-          # Pass dummy values to prevent using the default (Linux) toolchain.
           engine/src/flutter/tools/gn \
             --linux \
             --linux-cpu=${{ matrix.arch }} \
             --no-goma \
-            --target-toolchain _ \
-            --target-sysroot _ \
-            --target-triple _ \
             --runtime-mode=${{ matrix.mode }} \
             --disable-desktop-embeddings \
             --target-dir build
