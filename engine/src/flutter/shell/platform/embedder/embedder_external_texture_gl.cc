@@ -227,7 +227,8 @@ EmbedderExternalTextureGL::CreateTextureGLES(
   impeller::ContextGLES& context =
       impeller::ContextGLES::Cast(*aiks_context->GetContext());
   impeller::HandleGLES handle = context.GetReactor()->CreateHandle(
-      impeller::HandleType::kTexture, texture->name);
+      impeller::HandleType::kTexture, texture->name,
+      impeller::ReactorGLES::HandleOwnership::kBorrowed);
 
   auto gles_texture =
       impeller::TextureGLES::WrapTexture(context.GetReactor(), desc, handle);

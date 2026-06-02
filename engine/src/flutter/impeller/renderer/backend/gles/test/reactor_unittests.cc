@@ -49,6 +49,58 @@ TEST(ReactorGLES, CanAttachCleanupCallbacksToHandles) {
   EXPECT_EQ(value, 1);
 }
 
+TEST(ReactorGLES, BorrowedHandleCleanupDoesNotDeleteGLHandle) {
+  auto mock_gles_impl = std::make_unique<MockGLESImpl>();
+
+  EXPECT_CALL(*mock_gles_impl, DeleteTextures(_, _)).Times(0);
+
+  std::shared_ptr<MockGLES> mock_gles =
+      MockGLES::Init(std::move(mock_gles_impl));
+  ProcTableGLES::Resolver resolver = kMockResolverGLES;
+  auto proc_table = std::make_unique<ProcTableGLES>(resolver);
+  auto worker = std::make_shared<TestWorker>();
+  auto reactor = std::make_shared<ReactorGLES>(std::move(proc_table));
+  reactor->AddWorker(worker);
+
+  int value = 0;
+  auto handle = reactor->CreateHandle(HandleType::kTexture, 1123,
+                                      ReactorGLES::HandleOwnership::kBorrowed);
+  auto added =
+      reactor->RegisterCleanupCallback(handle, [&value]() { value++; });
+
+  EXPECT_TRUE(added);
+  EXPECT_TRUE(reactor->React());
+
+  reactor->CollectHandle(handle);
+  EXPECT_TRUE(reactor->AddOperation([](const ReactorGLES& reactor) {}));
+  EXPECT_TRUE(reactor->React());
+  EXPECT_EQ(value, 1);
+}
+
+TEST(ReactorGLES, BorrowedHandleShutdownDoesNotDeleteGLHandle) {
+  auto mock_gles_impl = std::make_unique<MockGLESImpl>();
+
+  EXPECT_CALL(*mock_gles_impl, DeleteTextures(_, _)).Times(0);
+
+  std::shared_ptr<MockGLES> mock_gles =
+      MockGLES::Init(std::move(mock_gles_impl));
+  ProcTableGLES::Resolver resolver = kMockResolverGLES;
+  auto proc_table = std::make_unique<ProcTableGLES>(resolver);
+  auto worker = std::make_shared<TestWorker>();
+  auto reactor = std::make_shared<ReactorGLES>(std::move(proc_table));
+  reactor->AddWorker(worker);
+
+  int value = 0;
+  auto handle = reactor->CreateHandle(HandleType::kTexture, 1123,
+                                      ReactorGLES::HandleOwnership::kBorrowed);
+  auto added =
+      reactor->RegisterCleanupCallback(handle, [&value]() { value++; });
+
+  EXPECT_TRUE(added);
+  reactor.reset();
+  EXPECT_EQ(value, 1);
+}
+
 TEST(ReactorGLES, DeletesHandlesDuringShutdown) {
   auto mock_gles_impl = std::make_unique<MockGLESImpl>();
 

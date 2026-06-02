@@ -83,7 +83,7 @@ ReactorGLES::ReactorGLES(std::unique_ptr<ProcTableGLES> gl)
 ReactorGLES::~ReactorGLES() {
   if (CanReactOnCurrentThread()) {
     for (auto& handle : handles_) {
-      if (handle.second.name.has_value()) {
+      if (handle.second.name.has_value() && handle.second.owns_gl_handle) {
         CollectGLHandle(*proc_table_, handle.first.GetType(),
                         handle.second.name.value());
       }
@@ -211,8 +211,14 @@ HandleGLES ReactorGLES::CreateUntrackedHandle(HandleType type) const {
   return new_handle;
 }
 
-HandleGLES ReactorGLES::CreateHandle(HandleType type, GLuint external_handle) {
+HandleGLES ReactorGLES::CreateHandle(HandleType type,
+                                     GLuint external_handle,
+                                     HandleOwnership ownership) {
   if (type == HandleType::kUnknown) {
+    return HandleGLES::DeadHandle();
+  }
+  if (ownership == HandleOwnership::kBorrowed && external_handle == GL_NONE) {
+    VALIDATION_LOG << "A borrowed handle requires an external GL handle.";
     return HandleGLES::DeadHandle();
   }
   auto new_handle = HandleGLES::Create(type);
@@ -228,7 +234,8 @@ HandleGLES ReactorGLES::CreateHandle(HandleType type, GLuint external_handle) {
   }
 
   WriterLock handles_lock(handles_mutex_);
-  handles_[new_handle] = LiveHandle{gl_handle};
+  handles_[new_handle] =
+      LiveHandle{gl_handle, ownership == HandleOwnership::kOwned};
   return new_handle;
 }
 
@@ -297,8 +304,12 @@ bool ReactorGLES::ConsolidateHandles() {
   TRACE_EVENT0("impeller", __FUNCTION__);
   const auto& gl = GetProcTable();
   std::thread::id current_thread = std::this_thread::get_id();
-  std::vector<std::tuple<HandleGLES, std::optional<GLStorage>>>
-      handles_to_delete;
+  struct HandleToDelete {
+    HandleGLES handle;
+    std::optional<GLStorage> storage;
+    bool owns_gl_handle = true;
+  };
+  std::vector<HandleToDelete> handles_to_delete;
   std::vector<std::tuple<DebugResourceType, GLint, std::string>>
       handles_to_name;
   {
@@ -320,7 +331,11 @@ bool ReactorGLES::ConsolidateHandles() {
         if (!handle.second.callback) {
           storage = handle.second.name;
         }
-        handles_to_delete.emplace_back(std::make_tuple(handle.first, storage));
+        handles_to_delete.push_back(HandleToDelete{
+            .handle = handle.first,
+            .storage = storage,
+            .owns_gl_handle = handle.second.owns_gl_handle,
+        });
         continue;
       }
       // Create live handles.
@@ -343,7 +358,7 @@ bool ReactorGLES::ConsolidateHandles() {
       }
     }
     for (const auto& handle_to_delete : handles_to_delete) {
-      handles_.erase(std::get<0>(handle_to_delete));
+      handles_.erase(handle_to_delete.handle);
     }
   }
 
@@ -352,11 +367,11 @@ bool ReactorGLES::ConsolidateHandles() {
                      std::get<2>(handle));
   }
   for (const auto& handle : handles_to_delete) {
-    const std::optional<GLStorage>& storage = std::get<1>(handle);
+    const std::optional<GLStorage>& storage = handle.storage;
     // This could be false if the handle was created and collected without
     // use. We still need to get rid of map entry.
-    if (storage.has_value()) {
-      CollectGLHandle(gl, std::get<0>(handle).GetType(), storage.value());
+    if (storage.has_value() && handle.owns_gl_handle) {
+      CollectGLHandle(gl, handle.handle.GetType(), storage.value());
     }
   }
 

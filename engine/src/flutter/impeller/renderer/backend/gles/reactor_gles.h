@@ -51,12 +51,17 @@ namespace impeller {
 ///             Creating a handle in the reactor doesn't mean an OpenGL handle
 ///             is created immediately. OpenGL handles become live before the
 ///             next reaction. Similarly, dropping the last reference to a
-///             reactor handle means that the OpenGL handle will be deleted at
-///             some point in the near future.
+///             owned reactor handle means that the OpenGL handle will be
+///             deleted at some point in the near future.
 ///
 class ReactorGLES {
  public:
   using WorkerID = UniqueID;
+
+  enum class HandleOwnership {
+    kOwned,
+    kBorrowed,
+  };
 
   //----------------------------------------------------------------------------
   /// @brief      A delegate implemented by a thread on which an OpenGL context
@@ -167,10 +172,15 @@ class ReactorGLES {
   ///
   /// @param[in]  type             The type of handle to create.
   /// @param[in]  external_handle  An already created GL handle if one exists.
+  /// @param[in]  ownership        Whether the reactor should collect the GL
+  ///                              object when the handle is collected. Borrowed
+  ///                              handles require an external handle.
   ///
   /// @return     The reactor handle.
   ///
-  HandleGLES CreateHandle(HandleType type, GLuint external_handle = GL_NONE);
+  HandleGLES CreateHandle(HandleType type,
+                          GLuint external_handle = GL_NONE,
+                          HandleOwnership ownership = HandleOwnership::kOwned);
 
   /// @brief Create a handle that is not managed by `ReactorGLES`.
   /// @details This behaves just like `CreateHandle` but it doesn't add the
@@ -272,11 +282,14 @@ class ReactorGLES {
     std::optional<GLStorage> name;
     std::optional<std::string> pending_debug_label;
     bool pending_collection = false;
+    bool owns_gl_handle = true;
     fml::ScopedCleanupClosure callback = {};
 
     LiveHandle() = default;
 
-    explicit LiveHandle(std::optional<GLStorage> p_name) : name(p_name) {}
+    explicit LiveHandle(std::optional<GLStorage> p_name,
+                        bool p_owns_gl_handle = true)
+        : name(p_name), owns_gl_handle(p_owns_gl_handle) {}
 
     constexpr bool IsLive() const { return name.has_value(); }
   };
