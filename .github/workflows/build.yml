@@ -1,6 +1,15 @@
 name: Build
 
 on: [push, pull_request]
+
+env:
+  TIZEN_GL_GN_ARGS: >-
+    --gn-args=skia_use_vulkan=false
+    --gn-args=shell_enable_vulkan=false
+    --gn-args=impeller_enable_vulkan=false
+    --gn-args=enable_vulkan_validation_layers=false
+    --gn-args=impeller_enable_vulkan_validation_layers=false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -78,7 +87,8 @@ jobs:
             --runtime-mode ${{ matrix.mode }} \
             --enable-fontconfig \
             --disable-desktop-embeddings \
-            --target-dir build
+            --target-dir build \
+            ${TIZEN_GL_GN_ARGS}
           cd engine/src
           ninja -C out/build flutter_engine_library
           cp -f flutter/third_party/icu/flutter/icudtl.dat out/build
@@ -96,7 +106,8 @@ jobs:
           --runtime-mode ${{ matrix.mode }} \
           --enable-fontconfig \
           --disable-desktop-embeddings \
-          --target-dir build
+          --target-dir build \
+          ${TIZEN_GL_GN_ARGS}
 
           cd engine/src
           ninja -C out/build flutter_engine_library
@@ -197,12 +208,14 @@ jobs:
       - name: Build
         working-directory: C:\workspace\flutter\engine\src
         run: |
+          $tizenGnArgs = $Env:TIZEN_GL_GN_ARGS -split ' '
           python3 .\flutter\tools\gn `
             --linux `
             --linux-cpu=${{ matrix.arch }} `
             --runtime-mode=${{ matrix.mode }} `
             --no-goma `
-            --target-dir build
+            --target-dir build `
+            @tizenGnArgs
           ninja -C .\out\build gen_snapshot
 
       - uses: actions/upload-artifact@v4
@@ -258,7 +271,8 @@ jobs:
             --target-triple _ \
             --runtime-mode=${{ matrix.mode }} \
             --disable-desktop-embeddings \
-            --target-dir build
+            --target-dir build \
+            ${TIZEN_GL_GN_ARGS}
           cd engine/src
           ninja -C out/build clang_arm64/gen_snapshot
 
@@ -315,7 +329,8 @@ jobs:
             --target-triple _ \
             --runtime-mode=${{ matrix.mode }} \
             --disable-desktop-embeddings \
-            --target-dir build
+            --target-dir build \
+            ${TIZEN_GL_GN_ARGS}
           cd engine/src
           ninja -C out/build clang_x64/gen_snapshot
 
