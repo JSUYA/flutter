@@ -35,11 +35,9 @@ std::optional<TextureLRU::Data> TextureLRU::FindTexture(
   auto key_value = key.value();
   for (size_t i = 0u; i < kTextureMaxSize; i++) {
     if (textures_[i].key == key_value) {
-      UpdateTexture(Data{.key = key_value,
-                         .texture = textures_[i].texture,
-                         .width = textures_[i].width,
-                         .height = textures_[i].height});
-      return std::make_optional(textures_[i]);
+      Data found = textures_[i];
+      UpdateTexture(found);
+      return std::make_optional(found);
     }
   }
   return std::nullopt;
