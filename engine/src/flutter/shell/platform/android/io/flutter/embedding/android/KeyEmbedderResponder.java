@@ -358,6 +358,25 @@ public class KeyEmbedderResponder implements KeyboardManager.Responder {
       case InputDevice.SOURCE_DPAD:
         output.deviceType = KeyData.DeviceType.kDirectionalPad;
         break;
+      case InputDevice.SOURCE_KEYBOARD | InputDevice.SOURCE_DPAD:
+        // Android TV can report both sources for the same event.
+        switch (event.getKeyCode()) {
+          case KeyEvent.KEYCODE_DPAD_UP:
+          case KeyEvent.KEYCODE_DPAD_DOWN:
+          case KeyEvent.KEYCODE_DPAD_LEFT:
+          case KeyEvent.KEYCODE_DPAD_RIGHT:
+          case KeyEvent.KEYCODE_DPAD_CENTER:
+          case KeyEvent.KEYCODE_DPAD_UP_LEFT:
+          case KeyEvent.KEYCODE_DPAD_UP_RIGHT:
+          case KeyEvent.KEYCODE_DPAD_DOWN_LEFT:
+          case KeyEvent.KEYCODE_DPAD_DOWN_RIGHT:
+            output.deviceType = KeyData.DeviceType.kDirectionalPad;
+            break;
+          default:
+            output.deviceType = KeyData.DeviceType.kKeyboard;
+            break;
+        }
+        break;
       case InputDevice.SOURCE_GAMEPAD:
         output.deviceType = KeyData.DeviceType.kGamepad;
         break;

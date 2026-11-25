@@ -2040,6 +2040,47 @@ public class KeyboardManagerTest {
   }
 
   @Test
+  public void deviceTypeFromCombinedKeyboardAndDpadSource() {
+    final KeyboardTester tester = new KeyboardTester();
+    final ArrayList<CallRecord> calls = new ArrayList<>();
+    tester.recordEmbedderCallsTo(calls);
+    tester.respondToTextInputWith(true);
+
+    final int combinedSource = InputDevice.SOURCE_KEYBOARD | InputDevice.SOURCE_DPAD;
+    assertTrue(
+        tester.keyboardManager.handleEvent(
+            new FakeKeyEvent(
+                ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0, combinedSource)));
+    assertTrue(
+        tester.keyboardManager.handleEvent(
+            new FakeKeyEvent(
+                ACTION_UP, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0, combinedSource)));
+    assertTrue(
+        tester.keyboardManager.handleEvent(
+            new FakeKeyEvent(ACTION_DOWN, 0, KEYCODE_DPAD_CENTER, 0, '\0', 0, combinedSource)));
+    assertTrue(
+        tester.keyboardManager.handleEvent(
+            new FakeKeyEvent(ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0, combinedSource)));
+    assertTrue(
+        tester.keyboardManager.handleEvent(
+            new FakeKeyEvent(
+                ACTION_DOWN,
+                SCAN_ARROW_LEFT,
+                KEYCODE_DPAD_LEFT,
+                0,
+                '\0',
+                0,
+                InputDevice.SOURCE_KEYBOARD)));
+
+    assertEquals(5, calls.size());
+    assertEquals(DeviceType.kDirectionalPad, calls.get(0).keyData.deviceType);
+    assertEquals(DeviceType.kDirectionalPad, calls.get(1).keyData.deviceType);
+    assertEquals(DeviceType.kDirectionalPad, calls.get(2).keyData.deviceType);
+    assertEquals(DeviceType.kKeyboard, calls.get(3).keyData.deviceType);
+    assertEquals(DeviceType.kKeyboard, calls.get(4).keyData.deviceType);
+  }
+
+  @Test
   public void deviceTypeFromInputDevice() {
     final KeyboardTester tester = new KeyboardTester();
     final ArrayList<CallRecord> calls = new ArrayList<>();
